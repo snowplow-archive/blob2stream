@@ -11,6 +11,8 @@ Following options are supported:
  ```bash
  $ git clone git@github.com:snowplow-incubator/blob2stream.git
  $ cd blob2stream
+ $ sbt clean assembly
+ $ java -jar target/scala-2.13/blob2stream-{{version}}.jar
  ```
 
 
