@@ -1,0 +1,97 @@
+/*
+ * Copyright (c) 2021 Snowplow Analytics Ltd. All rights reserved.
+ *
+ * This program is licensed to you under the Apache License Version 2.0,
+ * and you may not use this file except in compliance with the Apache License Version 2.0.
+ * You may obtain a copy of the Apache License Version 2.0 at http://www.apache.org/licenses/LICENSE-2.0.
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the Apache License Version 2.0 is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the Apache License Version 2.0 for the specific language governing permissions and limitations there under.
+ */
+
+package com.snowplowanalytics.blob2stream
+
+import blobstore.{Path, Store}
+import cats.effect.{Blocker, ExitCode, IO, IOApp}
+import cats.implicits._
+import com.monovore.decline.{Command, Opts}
+import com.permutive.pubsub.producer.Model.{ProjectId, Topic}
+import fs2.{Pipe, Stream}
+
+import java.net.URI
+
+object Main extends IOApp {
+
+  val input = Opts.option[URI]("input", "GCS or S3 Bucket input (full path)", "i").mapValidated { uri =>
+    Option(uri.getScheme) match {
+      case Some("gs" | "s3") => uri.validNel
+      case _ => "Input URI should have (gs|s3):// protocol".invalidNel
+    }
+  }
+
+  val output = Opts.option[String]("output", "PubSub topic or Kinesis Stream for output", "o").mapValidated { topic =>
+    topic.split("/").toList match {
+      case List("projects", project, "topics", topic) => Output.PubSubTopic(ProjectId(project), Topic(topic)).validNel
+      case List(kinesisStream)                        => Output.KinesisStream(kinesisStream).validNel
+      case _                                          => s"s$topic is invalid topic representation".invalidNel
+    }
+  }
+
+  val maxConcurrency = Opts.option[Int]("maxConcurrency", "Maximum concurrency").withDefault(256)
+
+  val limit = Opts.option[Int]("limit", "Amount of records to submit").orNone
+
+  val binary = Opts.flag("binary", "Whether data is binary or text").orFalse
+
+  val parser =
+    Command("blob2stream", "A job to send data from blob storage to stream")(
+      (input, output, binary, limit, maxConcurrency).mapN { (i, o, b, l, mc) =>
+        Config(i, o, b, l, mc)
+      }
+    )
+
+  sealed trait Output
+
+  object Output {
+    case class PubSubTopic(projectId: ProjectId, topic: Topic) extends Output
+
+    case class KinesisStream(name: String) extends Output
+  }
+
+  case class Config(
+    input: URI,
+    output: Output,
+    binary: Boolean,
+    limit: Option[Int],
+    mc: Int
+  )
+
+  def run(args: List[String]): IO[ExitCode] =
+    parser.parse(args) match {
+      case Right(Config(input, output, binary, limit, maxConcurrency)) =>
+        val pipe: (Store[IO], Int) => Pipe[IO, Path, Job.Message] = if (binary) Job.binary[IO] else Job.text[IO]
+        val limitPipe = limit match {
+          case Some(value) => (in: Stream[IO, Job.Message]) => in.take(value.toLong)
+          case None        => (in: Stream[IO, Job.Message]) => in
+        }
+        val resources = for {
+          blocker  <- Blocker[IO]
+          producer <- Job.getOutput[IO](output)
+        } yield (blocker, producer)
+        resources.use { case (blocker, producer) =>
+          for {
+            store <- Job.getStore[IO](blocker, input)
+            _ <- Job
+              .list[IO](store)(input)
+              .through(pipe(store, maxConcurrency))
+              .through(limitPipe)
+              .parEvalMapUnordered(maxConcurrency)(producer.send)
+              .compile
+              .drain
+          } yield ExitCode.Success
+        }
+      case Left(error) => IO.delay(println(s"Error! ${error.show}")).as(ExitCode.Error)
+    }
+}
