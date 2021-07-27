@@ -19,23 +19,23 @@ jobs:
           distribution: 'adopt'
           java-version: '11'
 
-      - name: Get current version
-        id: version
-        run: echo "::set-output name=tag::${GITHUB_REF#refs/tags/}"
+      # - name: Get current version
+      #   id: version
+      #   run: echo "::set-output name=tag::${GITHUB_REF#refs/tags/}"
 
-      - name: Assemble fat jar
-        run: sbt clean assembly
+      # - name: Assemble fat jar
+      #   run: sbt clean assembly
 
-      - name: Create GitHub release & Attach artifacts
-        uses: softprops/action-gh-release@v1
-        with:
-          draft: true
-          prerelease: ${{ contains(steps.version.outputs.tag, 'rc') }}
-          name: ${{ steps.version.outputs.tag }}
-          tag_name: ${{ steps.version.outputs.tag }}
-          files: target/scala-2.13/blob2stream-${{ steps.version.outputs.tag }}.jar
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # - name: Create GitHub release & Attach artifacts
+      #   uses: softprops/action-gh-release@v1
+      #   with:
+      #     draft: true
+      #     prerelease: ${{ contains(steps.version.outputs.tag, 'rc') }}
+      #     name: ${{ steps.version.outputs.tag }}
+      #     tag_name: ${{ steps.version.outputs.tag }}
+      #     files: target/scala-2.13/blob2stream-${{ steps.version.outputs.tag }}.jar
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to Docker Hub
         uses: docker/login-action@v1
