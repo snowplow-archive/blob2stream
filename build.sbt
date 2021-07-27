@@ -20,7 +20,7 @@ lazy val blob2stream = project
   .in(file("."))
   .settings(
     name := "blob2stream",
-    version := "0.1.0-rc1",
+    version := "0.1.0-rc2",
     organization := "com.snowplowanalytics",
     scalaVersion := "2.13.6",
     javacOptions := Seq("-source", "11", "-target", "11"),
