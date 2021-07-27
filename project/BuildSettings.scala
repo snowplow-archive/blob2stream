@@ -54,8 +54,8 @@ object BuildSettings {
     Docker / maintainer := "Snowplow Analytics Ltd. <support@snowplowanalytics.com>",
     dockerBaseImage := "adoptopenjdk:11-jre-hotspot-focal",
     dockerUpdateLatest := true,
-    dockerUsername := Some("snowplow"),
-    dockerRepository := Some("index.docker.io")
+    // dockerUsername := Some("snowplow"),
+    dockerRepository := Some("snowplow")
   )
 
   lazy val buildSettings: Seq[Setting[_]] = Seq[Setting[_]](
