@@ -43,12 +43,13 @@ object Main extends IOApp {
 
   val limit = Opts.option[Int]("limit", "Amount of records to submit").orNone
 
-  val binary = Opts.flag("binary", "Whether data is binary or text").orFalse
+  val binary = Opts.flag("binary", "Data is binary, not text").orFalse
+  val ungzip = Opts.flag("ungzip", "Ungzip data on-fly").orFalse
 
   val parser =
     Command("blob2stream", "A job to send data from blob storage to stream")(
-      (input, output, binary, limit, maxConcurrency).mapN { (i, o, b, l, mc) =>
-        Config(i, o, b, l, mc)
+      (input, output, binary, limit, maxConcurrency, ungzip).mapN { (i, o, b, l, mc, u) =>
+        Config(i, o, b, l, mc, u)
       }
     )
 
@@ -65,13 +66,14 @@ object Main extends IOApp {
     output: Output,
     binary: Boolean,
     limit: Option[Int],
-    mc: Int
+    mc: Int,
+    ungzip: Boolean
   )
 
   def run(args: List[String]): IO[ExitCode] =
     parser.parse(args) match {
-      case Right(Config(input, output, binary, limit, maxConcurrency)) =>
-        val pipe: (Store[IO], Int) => Pipe[IO, Path, Job.Message] = if (binary) Job.binary[IO] else Job.text[IO]
+      case Right(Config(input, output, binary, limit, maxConcurrency, ungzip)) =>
+        val pipe: (Store[IO], Int) => Pipe[IO, Path, Job.Message] = if (binary) Job.binary[IO] else Job.text[IO](ungzip)
         val limitPipe = limit match {
           case Some(value) => (in: Stream[IO, Job.Message]) => in.take(value.toLong)
           case None        => (in: Stream[IO, Job.Message]) => in
