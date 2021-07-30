@@ -13,20 +13,27 @@
 
 package com.snowplowanalytics.blob2stream
 
+import java.net.URI
+import java.nio.ByteBuffer
+
+import cats.effect.{Async, Blocker, Concurrent, ConcurrentEffect, ContextShift, Resource, Sync}
+import cats.implicits._
+
+import fs2.{Pipe, Stream}
+import fs2.text.{lines, utf8Decode}
+import fs2.compression.gunzip
+
 import blobstore.{Path, Store}
 import blobstore.gcs.GcsStore
 import blobstore.s3.S3Store
-import cats.effect.{Async, Blocker, Concurrent, ConcurrentEffect, ContextShift, Resource, Sync}
-import cats.implicits._
+
 import com.google.cloud.storage.StorageOptions
-import com.permutive.pubsub.producer.encoder.MessageEncoder
-import com.snowplowanalytics.blob2stream.Main.Output
-import fs2.{Pipe, Stream}
-import fs2.text.{lines, utf8Decode}
+
 import software.amazon.awssdk.services.s3.S3AsyncClient
 
-import java.net.URI
-import java.nio.ByteBuffer
+import com.permutive.pubsub.producer.encoder.MessageEncoder
+
+import com.snowplowanalytics.blob2stream.Main.Output
 
 object Job {
 
@@ -72,11 +79,17 @@ object Job {
   def list[F[_]](store: Store[F])(uri: URI): Stream[F, Path] =
     store.list(Path(uri.toString), recursive = true)
 
-  def text[F[_]: Concurrent](store: Store[F], maxConcurrency: Int): Pipe[F, Path, Message] =
-    _.map(path => store.get(path, 4096).through(utf8Decode).through(lines))
+  def text[F[_]: Concurrent](ungzip: Boolean)(store: Store[F], maxConcurrency: Int): Pipe[F, Path, Message] = {
+    val pipe: Pipe[F, Byte, String] = in => {
+      val bytes = if (ungzip) in.through(gunzip[F]()).flatMap(_.content) else in
+      bytes.through(utf8Decode).through(lines)
+    }
+
+    _.map(path => store.get(path, 4096).through(pipe))
       .parJoin(maxConcurrency)
       .filter(_.nonEmpty)
       .map(Message.Text.apply)
+  }
 
   def binary[F[_]: Concurrent](store: Store[F], maxConcurrency: Int): Pipe[F, Path, Message] =
     _.parEvalMapUnordered(maxConcurrency)(path => store.get(path, 4096).compile.to(Array).map(Message.Binary.apply))
