@@ -37,6 +37,8 @@ import com.snowplowanalytics.blob2stream.Main.Output
 
 object Job {
 
+  val DefaultAwsRegion = "eu-central-1"
+
   sealed trait Message {
     def toByteBuffer: ByteBuffer =
       this match {
@@ -68,12 +70,12 @@ object Job {
     case Message.Text(data)   => data.getBytes.asRight
   }
 
-  def getOutput[F[_]: Async](output: Output): Resource[F, Producer[F]] =
+  def getOutput[F[_]: Async](output: Output, region: Option[String]): Resource[F, Producer[F]] =
     output match {
       case Output.PubSubTopic(projectId, topic) =>
         Producer.pubsub[F](projectId, topic)
       case Output.KinesisStream(name) =>
-        Producer.kinesis[F](name, "eu-central-1")
+        Producer.kinesis[F](name, region.getOrElse(DefaultAwsRegion))
     }
 
   def list[F[_]](store: Store[F])(uri: URI): Stream[F, Path] =
