@@ -20,7 +20,7 @@ object Dependencies {
     val decline      = "1.3.0"
     val fs2PubSub    = "0.16.1"
     val fs2Blobstore = "0.7.3"
-    val fs2Aws       = "3.0.10"
+    val fs2Aws       = "3.1.1"
     val slf4j        = "1.7.30"
     val googleApis   = "1.118.1" // Override transitive dependency of fs2-blobstore
     // Scala (test only)
