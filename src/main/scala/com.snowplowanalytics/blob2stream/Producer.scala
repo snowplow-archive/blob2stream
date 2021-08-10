@@ -67,7 +67,7 @@ object Producer {
     } yield (poolSize, config)
 
     for {
-      init <- Resource.liftF(config)
+      init <- Resource.eval(config)
       (poolSize, config) = init
       ec <- Resource
         .make(Sync[F].delay(Executors.newFixedThreadPool(poolSize)))(ex => Sync[F].delay(ex.shutdown()))

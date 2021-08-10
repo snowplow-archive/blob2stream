@@ -86,7 +86,7 @@ object Main extends IOApp {
           case None        => (in: Stream[IO, Job.Message]) => in
         }
         val resources = for {
-          envRegion <- Resource.liftF(getRegion(region))
+          envRegion <- Resource.eval(getRegion(region))
           blocker   <- Blocker[IO]
           producer  <- Job.getOutput[IO](output, envRegion)
         } yield (blocker, producer)
