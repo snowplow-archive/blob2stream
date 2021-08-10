@@ -22,6 +22,7 @@ object Dependencies {
     val fs2Blobstore = "0.7.3"
     val fs2Aws       = "3.0.10"
     val slf4j        = "1.7.30"
+    val googleApis   = "1.118.1" // Override transitive dependency of fs2-blobstore
     // Scala (test only)
     val specs2     = "4.10.5"
     val scalaCheck = "1.15.1"
@@ -33,6 +34,7 @@ object Dependencies {
     "com.permutive"            %% "fs2-google-pubsub-grpc" % V.fs2PubSub,
     "com.github.fs2-blobstore" %% "gcs"                    % V.fs2Blobstore,
     "com.github.fs2-blobstore" %% "s3"                     % V.fs2Blobstore,
+    "com.google.cloud"          % "google-cloud-storage"   % V.googleApis,
     "io.laserdisc"             %% "fs2-aws"                % V.fs2Aws,
     "org.slf4j"                 % "slf4j-simple"           % V.slf4j,
     "org.specs2"               %% "specs2-core"            % V.specs2     % Test,
