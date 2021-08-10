@@ -13,22 +13,26 @@
 
 package com.snowplowanalytics.blob2stream
 
-import cats.effect.{Async, Resource, Sync}
-import cats.implicits.catsSyntaxOptionId
-import cats.syntax.flatMap._
-import cats.syntax.functor._
-import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
-import com.amazonaws.services.kinesis.producer.{KinesisProducer, KinesisProducerConfiguration}
-import com.google.common.util.concurrent.{FutureCallback, Futures, ListenableFuture}
-import com.permutive.pubsub.producer.Model.{ProjectId, Topic}
-import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerConfig}
-import com.snowplowanalytics.blob2stream.Job.Message
+import java.util.UUID
+import java.util.concurrent.Executors
 
 import scala.concurrent.duration._
 import scala.concurrent.ExecutionContext
 
-import java.util.UUID
-import java.util.concurrent.Executors
+import cats.implicits.catsSyntaxOptionId
+import cats.syntax.flatMap._
+import cats.syntax.functor._
+import cats.effect.{Async, Resource, Sync}
+
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain
+import com.amazonaws.services.kinesis.producer.{KinesisProducer, KinesisProducerConfiguration}
+
+import com.google.common.util.concurrent.{FutureCallback, Futures, ListenableFuture}
+
+import com.permutive.pubsub.producer.Model.{ProjectId, Topic}
+import com.permutive.pubsub.producer.grpc.{GooglePubsubProducer, PubsubProducerConfig}
+
+import com.snowplowanalytics.blob2stream.Job.Message
 
 trait Producer[F[_]] {
   def send(message: Message): F[Unit]
@@ -73,7 +77,6 @@ object Producer {
       def send(message: Message): F[Unit] = {
         val result = for {
           partitionKey <- Sync[F].delay(UUID.randomUUID())
-          _            <- Sync[F].delay(println(s"Putting ${message}"))
           future       <- Sync[F].delay(producer.addUserRecord(stream, partitionKey.toString, message.toByteBuffer))
           result       <- toAsync(ec, future)
         } yield result

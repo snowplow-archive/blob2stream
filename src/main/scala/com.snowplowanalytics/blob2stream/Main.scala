@@ -13,14 +13,18 @@
 
 package com.snowplowanalytics.blob2stream
 
-import blobstore.{Path, Store}
-import cats.effect.{Blocker, ExitCode, IO, IOApp}
-import cats.implicits._
-import com.monovore.decline.{Command, Opts}
-import com.permutive.pubsub.producer.Model.{ProjectId, Topic}
+import java.net.URI
+
 import fs2.{Pipe, Stream}
 
-import java.net.URI
+import blobstore.{Path, Store}
+
+import cats.implicits._
+import cats.effect.{Blocker, ExitCode, IO, IOApp, Resource}
+
+import com.monovore.decline.{Command, Opts}
+
+import com.permutive.pubsub.producer.Model.{ProjectId, Topic}
 
 object Main extends IOApp {
 
@@ -42,14 +46,16 @@ object Main extends IOApp {
   val maxConcurrency = Opts.option[Int]("maxConcurrency", "Maximum concurrency").withDefault(256)
 
   val limit = Opts.option[Int]("limit", "Amount of records to submit").orNone
+  val region =
+    Opts.option[String]("region", "Region to use for Kinesis (AWS only). Overwrites AWS_REGION env var,").orNone
 
   val binary = Opts.flag("binary", "Data is binary, not text").orFalse
   val ungzip = Opts.flag("ungzip", "Ungzip data on-fly").orFalse
 
   val parser =
     Command("blob2stream", "A job to send data from blob storage to stream")(
-      (input, output, binary, limit, maxConcurrency, ungzip).mapN { (i, o, b, l, mc, u) =>
-        Config(i, o, b, l, mc, u)
+      (input, output, binary, limit, maxConcurrency, ungzip, region).mapN { (i, o, b, l, mc, u, r) =>
+        Config(i, o, b, l, mc, u, r)
       }
     )
 
@@ -67,20 +73,22 @@ object Main extends IOApp {
     binary: Boolean,
     limit: Option[Int],
     mc: Int,
-    ungzip: Boolean
+    ungzip: Boolean,
+    region: Option[String]
   )
 
   def run(args: List[String]): IO[ExitCode] =
     parser.parse(args) match {
-      case Right(Config(input, output, binary, limit, maxConcurrency, ungzip)) =>
+      case Right(Config(input, output, binary, limit, maxConcurrency, ungzip, region)) =>
         val pipe: (Store[IO], Int) => Pipe[IO, Path, Job.Message] = if (binary) Job.binary[IO] else Job.text[IO](ungzip)
         val limitPipe = limit match {
           case Some(value) => (in: Stream[IO, Job.Message]) => in.take(value.toLong)
           case None        => (in: Stream[IO, Job.Message]) => in
         }
         val resources = for {
-          blocker  <- Blocker[IO]
-          producer <- Job.getOutput[IO](output)
+          envRegion <- Resource.liftF(getRegion(region))
+          blocker   <- Blocker[IO]
+          producer  <- Job.getOutput[IO](output, envRegion)
         } yield (blocker, producer)
         resources.use { case (blocker, producer) =>
           for {
@@ -95,5 +103,11 @@ object Main extends IOApp {
           } yield ExitCode.Success
         }
       case Left(error) => IO.delay(println(s"Error! ${error.show}")).as(ExitCode.Error)
+    }
+
+  def getRegion(fromCli: Option[String]): IO[Option[String]] =
+    IO.pure(fromCli).flatMap {
+      case Some(region) => IO.pure(Some(region))
+      case None         => IO.delay(sys.env.get("AWS_REGION"))
     }
 }
