@@ -1,0 +1,8 @@
+Version 0.1.0 (2021-08-23)
+--------------------------
+Bump fs2-aws to 3.1.1 (#8)
+Bump google-cloud-storage to 1.118.1 (#7)
+Add region (#6)
+Implement unzip (#5)
+Integrate GitHub Actions (#4)
+Add first version of the project
